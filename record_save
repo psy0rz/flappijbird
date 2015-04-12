@@ -1,0 +1,3 @@
+#!/bin/bash
+
+avrdude  -c usbasp -p m328p -Ueeprom:r:$1:r
