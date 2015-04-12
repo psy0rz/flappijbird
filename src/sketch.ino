@@ -18,21 +18,47 @@ Released under GPL.
 ***/
 
 
+//display
 static const int DATA_PIN = 20;
 static const int CLK_PIN  = 5;
 static const int CS_PIN   = 21;
-
-static const int lowPin = 11;             /* ground pin for the buton ;-) */
-static const int buttonPin = 9;           /* choose the input pin for the pushbutton */
-static const int soundPin = 8;             
-
-static const int resetScorePin = 10;      /* pull this to ground to reset score */
-static const int scoreAddress = 1023;
-
 static const int INTENSITY = 5;
 
+//button and sound
+static const int LOW_PIN = 11;             // ground pin for the button ;-)
+static const int BUTTON_PIN = 9;           // choose the input pin for the pushbutton 
+static const int SOUND_PIN = 8;            // pieze element for sound effects
+
+//highscores
+static const int RESET_SCORE_PIN = 10;      //pull this to ground during reset, to clear highscore 
+static const int SCORE_ADDRESS = 1023;      //eeprom address to store score in
+static const int MAX_RECORDING = 1000;        //maxnumber of button pushes to record 
+
+//screen size
+static const int Y_MAX = 1000; ;//not actual screen size..we downscale this later because arduino is bad at floats
+static const int Y_MIN = -100; //negative so the player doesnt instantly die on the bottom
+static const int X_MAX = 7;
+static const int X_MIN = 0;
+
+//bird and tube settings
+static const int BIRD_JUMP_SPEED = 60; //strongness of the jump. 
+static const int TUBES = 3; //max nr of tubes active at the same time
+static const int BIRD_GRAVITY=-7; 
 
 LedControl lc=LedControl(DATA_PIN, CLK_PIN, CS_PIN, 1);
+
+char msg[100]; //global message buffer for textscroller
+
+//status of a tube
+struct tube_status
+{
+  int y;
+  int x;
+  int gap;
+};
+
+//are we in playback-mode? 
+bool recording_play=false;
 
 void setup()
 {
@@ -47,57 +73,37 @@ void setup()
     /* and clear the display */
     lc.clearDisplay(0);
     /* setup pins */
-    pinMode(buttonPin, INPUT_PULLUP);
-    pinMode(lowPin, OUTPUT);
-    digitalWrite(lowPin, LOW);
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    pinMode(LOW_PIN, OUTPUT);
+    digitalWrite(LOW_PIN, LOW);
 
     //reset score?
-    pinMode(resetScorePin, INPUT_PULLUP);
-    if (!digitalRead(resetScorePin))
+    pinMode(RESET_SCORE_PIN, INPUT_PULLUP);
+    if (!digitalRead(RESET_SCORE_PIN))
     {
-      EEPROM.write(scoreAddress,0);
+      EEPROM.write(SCORE_ADDRESS,0);
     }
 }
 
-//screen size
-#define Y_MAX 1000 //not actual screen size..we downscale this later because arduino is bad at floats
-#define Y_MIN -100 //negative so the player doesnt instantly die on the bottom
-#define X_MAX 7
-#define X_MIN 0
-
-#define BIRD_JUMP_SPEED 60
-
-#define TUBES 3 //max nr of tubes active at the same time
-
-#define MAX_RECORDING 1000 //number of button pushes
-
-char msg[100];
-
-struct tube_status
-{
-  int y;
-  int x;
-  int gap;
-};
-
+//reboot arduino
 void(* reboot) (void) = 0;
 
 //called when player is finshed
 void finished(int score, byte recording[])
 {
-  noTone(soundPin); //interference with scroll
+  noTone(SOUND_PIN); //interference with scroll
   sprintf(msg,"    %d  ", score);
-  scrolltext(lc, msg, 50);
+  scrolltext(lc, msg, 50, BUTTON_PIN);
 
   //got highscore?
-  if (score>EEPROM.read(scoreAddress) || EEPROM.read(scoreAddress)==255)
+  if (score>EEPROM.read(SCORE_ADDRESS) || EEPROM.read(SCORE_ADDRESS)==255)
   {
     //store highscore
-    EEPROM.write(scoreAddress, score);
+    EEPROM.write(SCORE_ADDRESS, score);
     //store recording
     eeprom_update_block(recording, 0, MAX_RECORDING);
     rickroll();
-    scrolltext(lc, "   w00t!  ", 25, buttonPin);
+    scrolltext(lc, "   w00t!  ", 25, BUTTON_PIN);
   }
   else
   {
@@ -106,12 +112,11 @@ void finished(int score, byte recording[])
   reboot();
 }
 
-bool recording_play=false;
 
 void sound(int freq, int duration)
 {
   if (!recording_play)
-    tone(soundPin, freq, duration);
+    tone(SOUND_PIN, freq, duration);
 }
 
 
@@ -123,35 +128,32 @@ void loop()
   int bird_y=Y_MAX/2;
   int bird_x=3;
   int bird_speed=BIRD_JUMP_SPEED; //game starts with jump
-  int bird_gravity=-7;
   byte bird_bits=0;
 
-  //tube
-  int tube_min=100;
+  //settings for new tubes (static for now)
+  int tube_min=100; //min and max tube y-offsets for randomizer
   int tube_max=800;
-  int tube_gap=300;
+  int tube_gap=300; //gap size
+  int tube_countdown_min=10; //min and max time for tube creation randomizer 
+  int tube_countdown_max=100;
 
-  int tube_shift_delay=10; //frames between each left shift
-  tube_status tubes[TUBES]; 
+  //tube dynamics
+  int tube_shift_delay=10; //frames between each left shift (static for now)
+  tube_status tubes[TUBES];  //the list of tubes (look at tube_status struct for more info)
   int tube_shift_countdown=tube_shift_delay; //count down before next leftshit
   int tube_countdown=10; //cycles before creating next tube
-  int tube_countdown_min=10;
-  int tube_countdown_max=100;
   byte tube_bits_at_bird=0;
-
-  int score=0;
 
   unsigned long start_time=millis();
   int frame_time=25;
 
   bool button_state=true;
 
+  int score=0;
   byte recording[MAX_RECORDING]; //record button frame-timing for replay
   byte recording_press_nr=0;
   byte recording_press_time=0;
   memset(recording, 255, MAX_RECORDING);
-
-//  byte recording_frames=0; //number of frames since last press
 
   //init tubes  
   for (int tube_nr=0; tube_nr<TUBES; tube_nr++)
@@ -160,8 +162,8 @@ void loop()
   }
 
   //show highscore
-  sprintf(msg,"   highscore %d - flappIJbird ", EEPROM.read(scoreAddress));
-  if (scrolltext(lc, msg, 25, buttonPin))
+  sprintf(msg,"   highscore %d - flappIJbird ", EEPROM.read(SCORE_ADDRESS));
+  if (scrolltext(lc, msg, 25, BUTTON_PIN))
   {
     //scroller was NOT aborted, so start playback
     recording_play=true;
@@ -183,12 +185,12 @@ void loop()
     //////////////////////////////// bird physics and control
 
     //gravity, keep accelerating downwards
-    bird_speed=bird_speed+bird_gravity;
+    bird_speed=bird_speed+BIRD_GRAVITY;
 
     //button changed?
-    if (!recording_play && digitalRead(buttonPin) != button_state)
+    if (!recording_play && digitalRead(BUTTON_PIN) != button_state)
     {
-      button_state=digitalRead(buttonPin);
+      button_state=digitalRead(BUTTON_PIN);
 
       //its pressed, so jump! 
       if (!button_state)
@@ -214,7 +216,7 @@ void loop()
       }
 
       //abort playback?
-      if (!digitalRead(buttonPin))
+      if (!digitalRead(BUTTON_PIN))
         reboot();
     }
 
@@ -309,6 +311,8 @@ void loop()
     //draw bird (and tube)
     lc.setRow(0, bird_x,  bird_bits|tube_bits_at_bird);
  
+
+    /////////////////////////// tube collision detection
     //is the tube at the bird? 
     if (tube_bits_at_bird)
     {
@@ -332,7 +336,6 @@ void loop()
 
     //record framenumber since last press
     recording_press_time++;
-
 
     //wait for next frame
     while( (millis()-start_time) < frame_time){
