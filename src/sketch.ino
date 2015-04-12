@@ -36,6 +36,8 @@ LedControl lc=LedControl(DATA_PIN, CLK_PIN, CS_PIN, 1);
 
 void setup()
 {
+    randomSeed(0); //change this for a different level
+
     /*
        The MAX72XX is in power-saving mode on startup,
        we have to do a wakeup call
@@ -126,7 +128,7 @@ void loop()
 
   //tube
   int tube_min=100;
-  int tube_max=900;
+  int tube_max=800;
   int tube_gap=300;
 
   int tube_shift_delay=250; //milliseconds between each left shift
