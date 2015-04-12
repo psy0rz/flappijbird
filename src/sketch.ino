@@ -187,27 +187,31 @@ void loop()
     //gravity, keep accelerating downwards
     bird_speed=bird_speed+BIRD_GRAVITY;
 
-    //button changed?
-    if (!recording_play && digitalRead(BUTTON_PIN) != button_state)
+    //not in playback mode?
+    if (!recording_play)
     {
-      button_state=digitalRead(BUTTON_PIN);
-
-      //its pressed, so jump! 
-      if (!button_state)
+      //button changed?
+      if (!recording_play && digitalRead(BUTTON_PIN) != button_state)
       {
-          bird_speed=BIRD_JUMP_SPEED;
+        button_state=digitalRead(BUTTON_PIN);
 
-          //move to next recording position (for later game-replay)
-          if (recording_press_nr<MAX_RECORDING)
-            recording[recording_press_nr]=recording_press_time;
-          recording_press_time=0;
-          recording_press_nr++;
+        //its pressed, so jump! 
+        if (!button_state)
+        {
+            bird_speed=BIRD_JUMP_SPEED;
+
+            //move to next recording position (for later game-replay)
+            if (recording_press_nr<MAX_RECORDING)
+              recording[recording_press_nr]=recording_press_time;
+            recording_press_time=0;
+            recording_press_nr++;
+        }
       }
     }
-
-    //we're in playback, simulate a buttonpress?
-    if (recording_play)
+    //we're in playback mode 
+    else 
     {
+      //is it time to simulate the next buttonpress?
       if (recording_press_time>= recording[recording_press_nr])
       {
         bird_speed=BIRD_JUMP_SPEED;
@@ -220,7 +224,7 @@ void loop()
         reboot();
     }
 
-    //change y postion of bird
+    //change y postion of bird according to current speed
     bird_y=bird_y+bird_speed;
 
     //crashed on bottom?
@@ -232,21 +236,24 @@ void loop()
         sound( 2000- (i*200), 200);
         lc.setRow(0, bird_x, tube_bits_at_bird);
         delay(50);
-        lc.setRow(0, bird_x, bird_bits);
+        lc.setRow(0, bird_x, tube_bits_at_bird|bird_bits);
         delay(50);
       }
       finished(score, recording);
     }
 
+    //clip to ceiling
     if (bird_y>Y_MAX)
       bird_y=Y_MAX;
 
-    //downscale birdheight to 8 pixels :P
+    //downscale height to 8 pixels :P
     //( LSB is top pixel )
     bird_bits=(B10000000 >> ((bird_y*7) / Y_MAX));
 
-    //////////////////////////////// tubes
+    //increase framenumber since last button press 
+    recording_press_time++;
 
+    //////////////////////////////// tubes
     tube_shift_countdown--;
     tube_countdown--;
 
@@ -332,10 +339,6 @@ void loop()
         finished(score, recording);
       }
     }
-
-
-    //record framenumber since last press
-    recording_press_time++;
 
     //wait for next frame
     while( (millis()-start_time) < frame_time){
