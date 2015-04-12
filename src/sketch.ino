@@ -37,7 +37,6 @@ LedControl lc=LedControl(DATA_PIN, CLK_PIN, CS_PIN, 1);
 void setup()
 {
     randomSeed(0); //change this for a different level
-
     /*
        The MAX72XX is in power-saving mode on startup,
        we have to do a wakeup call
@@ -70,7 +69,7 @@ void setup()
 
 #define TUBES 3 //max nr of tubes active at the same time
 
-#define MAX_RECORDING 500 //number of button pushes
+#define MAX_RECORDING 1000 //number of button pushes
 
 char msg[100];
 
@@ -98,6 +97,7 @@ void finished(int score, byte recording[])
     //store recording
     eeprom_update_block(recording, 0, MAX_RECORDING);
     rickroll();
+    scrolltext(lc, "   w00t!  ", 25, buttonPin);
   }
   else
   {

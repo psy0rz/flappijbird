@@ -84,7 +84,7 @@ int beats[] = {1,1,1,1,1,1,4,4,2,1,1,1,1,1,1,4,4,2};
 // The tempo is how fast to play the song.
 // To make the song play faster, decrease this value.
 
-int tempo = 100;
+int tempo = 120;
 
 int frequency(char note) 
 {
@@ -112,7 +112,7 @@ int frequency(char note)
   {
     if (names[i] == note)         // Is this the one?
     {
-      return(frequencies[i]*2);     // Yes! Return the frequency
+      return(frequencies[i]*3);     // Yes! Return the frequency
     }
   }
   return(0);  // We looked through everything and didn't find it,
