@@ -26,7 +26,7 @@ static const int buttonPin = 9;           /* choose the input pin for the pushbu
 static const int soundPin = 8;             
 
 static const int resetScorePin = 10;      /* pull this to ground to reset score */
-static const int scoreAddress = 10;           /* choose the input pin for the pushbutton */
+static const int scoreAddress = 1023;
 
 static const int INTENSITY = 5;
 
@@ -53,7 +53,7 @@ void setup()
     pinMode(resetScorePin, INPUT_PULLUP);
     if (!digitalRead(resetScorePin))
     {
-      EEPROM.write(scoreAddress,0);
+      EEPROM.update(scoreAddress,0);
     }
 }
 
@@ -67,6 +67,8 @@ void setup()
 
 #define TUBES 3 //max nr of tubes active at the same time
 
+#define MAX_RECORDING 500 //number of button pushes
+
 char msg[100];
 
 struct tube_status
@@ -78,7 +80,7 @@ struct tube_status
 
 void(* reboot) (void) = 0;
 
-void finished(int score)
+void finished(int score, byte recording[])
 {
   noTone(soundPin); //interference with scroll
   sprintf(msg,"    %d  ", score);
@@ -87,7 +89,12 @@ void finished(int score)
   //got highscore?
   if (score>EEPROM.read(scoreAddress) || EEPROM.read(scoreAddress)==255)
   {
-    EEPROM.write(scoreAddress, score);
+    //store highscore
+    EEPROM.update(scoreAddress, score);
+    //store recording
+    for (int i=0; i++; i<MAX_RECORDING)
+      EEPROM.update(i, recording[i]);
+
     rickroll();
   }
   else
@@ -129,6 +136,12 @@ void loop()
 
   bool button_state=true;
 
+  byte recording[MAX_RECORDING]; //record button frame-timing for replay
+  byte recording_press_nr=0;
+  memset(recording, 0, MAX_RECORDING);
+
+//  byte recording_frames=0; //number of frames since last press
+
   //init tubes  
   for (int tube_nr=0; tube_nr<TUBES; tube_nr++)
   {
@@ -139,9 +152,11 @@ void loop()
   sprintf(msg,"   highscore %d - flappIJbird ", EEPROM.read(scoreAddress));
   while(scrolltext(lc, msg, 25, buttonPin));
 
+  //main gameloop
   while(1)
   {
     start_time=millis();
+
     //////////////////////////////// bird physics and control
 
     //gravity, keep accelerating downwards
@@ -154,7 +169,14 @@ void loop()
 
       //its pressed, so jump! 
       if (!button_state)
+      {
           bird_speed=BIRD_JUMP_SPEED;
+
+          //move to next recording position (for later game-replay)
+          recording_press_nr++;
+          if (recording_press_nr<MAX_RECORDING)
+            recording_frames[recording_press_nr]=0;
+      }
     }
 
     //change y postion of bird
@@ -260,6 +282,9 @@ void loop()
         finished(score);
       }
     }
+
+    //record framenumber since last press
+    recording[recording_press_nr]++;
 
 
     //wait for next frame
