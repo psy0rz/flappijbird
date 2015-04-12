@@ -37,7 +37,6 @@ LedControl lc=LedControl(DATA_PIN, CLK_PIN, CS_PIN, 1);
 void setup()
 {
     randomSeed(0); //change this for a different level
-
     /*
        The MAX72XX is in power-saving mode on startup,
        we have to do a wakeup call
@@ -70,7 +69,7 @@ void setup()
 
 #define TUBES 3 //max nr of tubes active at the same time
 
-#define MAX_RECORDING 500 //number of button pushes
+#define MAX_RECORDING 1000 //number of button pushes
 
 char msg[100];
 
@@ -98,6 +97,7 @@ void finished(int score, byte recording[])
     //store recording
     eeprom_update_block(recording, 0, MAX_RECORDING);
     rickroll();
+    scrolltext(lc, "   w00t!  ", 25, buttonPin);
   }
   else
   {
@@ -131,9 +131,9 @@ void loop()
   int tube_max=800;
   int tube_gap=300;
 
-  int tube_shift_delay=250; //milliseconds between each left shift
+  int tube_shift_delay=10; //frames between each left shift
   tube_status tubes[TUBES]; 
-  unsigned long tube_time=millis();
+  int tube_shift_countdown=tube_shift_delay; //count down before next leftshit
   int tube_countdown=10; //cycles before creating next tube
   int tube_countdown_min=10;
   int tube_countdown_max=100;
@@ -245,14 +245,15 @@ void loop()
 
     //////////////////////////////// tubes
 
+    tube_shift_countdown--;
     tube_countdown--;
 
     //is it time to shift the tubes to left?
-    if (millis()-tube_time > tube_shift_delay)
+    if (tube_shift_countdown<=0)
     {
       tube_bits_at_bird=0;
+      tube_shift_countdown=tube_shift_delay;
 
-      tube_time=millis();
       //traverse all the tubes
       for (int tube_nr=0; tube_nr<TUBES; tube_nr++)
       {
