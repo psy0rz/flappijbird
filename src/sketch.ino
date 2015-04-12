@@ -131,9 +131,9 @@ void loop()
   int tube_max=800;
   int tube_gap=300;
 
-  int tube_shift_delay=250; //milliseconds between each left shift
+  int tube_shift_delay=10; //frames between each left shift
   tube_status tubes[TUBES]; 
-  unsigned long tube_time=millis();
+  int tube_shift_countdown=tube_shift_delay; //count down before next leftshit
   int tube_countdown=10; //cycles before creating next tube
   int tube_countdown_min=10;
   int tube_countdown_max=100;
@@ -245,14 +245,15 @@ void loop()
 
     //////////////////////////////// tubes
 
+    tube_shift_countdown--;
     tube_countdown--;
 
     //is it time to shift the tubes to left?
-    if (millis()-tube_time > tube_shift_delay)
+    if (tube_shift_countdown<=0)
     {
       tube_bits_at_bird=0;
+      tube_shift_countdown=tube_shift_delay;
 
-      tube_time=millis();
       //traverse all the tubes
       for (int tube_nr=0; tube_nr<TUBES; tube_nr++)
       {
