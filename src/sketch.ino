@@ -1,6 +1,7 @@
 #include "LedControlMS.h"
 #include "scroller.h"
 #include <EEPROM.h>
+#include <avr/eeprom.h>
 #include "rickroll.h"
 /*** 
 
@@ -53,7 +54,7 @@ void setup()
     pinMode(resetScorePin, INPUT_PULLUP);
     if (!digitalRead(resetScorePin))
     {
-      EEPROM.update(scoreAddress,0);
+      EEPROM.write(scoreAddress,0);
     }
 }
 
@@ -80,6 +81,7 @@ struct tube_status
 
 void(* reboot) (void) = 0;
 
+//called when player is finshed
 void finished(int score, byte recording[])
 {
   noTone(soundPin); //interference with scroll
@@ -90,11 +92,9 @@ void finished(int score, byte recording[])
   if (score>EEPROM.read(scoreAddress) || EEPROM.read(scoreAddress)==255)
   {
     //store highscore
-    EEPROM.update(scoreAddress, score);
+    EEPROM.write(scoreAddress, score);
     //store recording
-    for (int i=0; i++; i<MAX_RECORDING)
-      EEPROM.update(i, recording[i]);
-
+    eeprom_update_block(recording, 0, MAX_RECORDING);
     rickroll();
   }
   else
@@ -102,6 +102,14 @@ void finished(int score, byte recording[])
     ;
   }
   reboot();
+}
+
+bool recording_play=false;
+
+void sound(int freq, int duration)
+{
+  if (!recording_play)
+    tone(soundPin, freq, duration);
 }
 
 
@@ -112,7 +120,7 @@ void loop()
   //bird physics
   int bird_y=Y_MAX/2;
   int bird_x=3;
-  int bird_speed=0;
+  int bird_speed=BIRD_JUMP_SPEED; //game starts with jump
   int bird_gravity=-7;
   byte bird_bits=0;
 
@@ -138,7 +146,8 @@ void loop()
 
   byte recording[MAX_RECORDING]; //record button frame-timing for replay
   byte recording_press_nr=0;
-  memset(recording, 0, MAX_RECORDING);
+  byte recording_press_time=0;
+  memset(recording, 255, MAX_RECORDING);
 
 //  byte recording_frames=0; //number of frames since last press
 
@@ -150,7 +159,19 @@ void loop()
 
   //show highscore
   sprintf(msg,"   highscore %d - flappIJbird ", EEPROM.read(scoreAddress));
-  while(scrolltext(lc, msg, 25, buttonPin));
+  if (scrolltext(lc, msg, 25, buttonPin))
+  {
+    //scroller was NOT aborted, so start playback
+    recording_play=true;
+    eeprom_read_block(recording, 0, MAX_RECORDING);
+  }
+
+  //start signal
+  for(int i=0; i<10; i++)
+  {
+    sound(1000+(i*100), 100);
+    delay(50);
+  }
 
   //main gameloop
   while(1)
@@ -162,8 +183,8 @@ void loop()
     //gravity, keep accelerating downwards
     bird_speed=bird_speed+bird_gravity;
 
-    //button changed
-    if ( digitalRead(buttonPin) != button_state)
+    //button changed?
+    if (!recording_play && digitalRead(buttonPin) != button_state)
     {
       button_state=digitalRead(buttonPin);
 
@@ -173,10 +194,26 @@ void loop()
           bird_speed=BIRD_JUMP_SPEED;
 
           //move to next recording position (for later game-replay)
-          recording_press_nr++;
           if (recording_press_nr<MAX_RECORDING)
-            recording_frames[recording_press_nr]=0;
+            recording[recording_press_nr]=recording_press_time;
+          recording_press_time=0;
+          recording_press_nr++;
       }
+    }
+
+    //we're in playback, simulate a buttonpress?
+    if (recording_play)
+    {
+      if (recording_press_time>= recording[recording_press_nr])
+      {
+        bird_speed=BIRD_JUMP_SPEED;
+        recording_press_time=0;
+        recording_press_nr++;
+      }
+
+      //abort playback?
+      if (!digitalRead(buttonPin))
+        reboot();
     }
 
     //change y postion of bird
@@ -185,15 +222,16 @@ void loop()
     //crashed on bottom?
     if (bird_y<Y_MIN)
     {
+      //blink and make sound
       for (int i=0; i<10; i++)
       {
-        tone(soundPin, 2000- (i*200), 200);
+        sound( 2000- (i*200), 200);
         lc.setRow(0, bird_x, tube_bits_at_bird);
         delay(50);
         lc.setRow(0, bird_x, bird_bits);
         delay(50);
       }
-      finished(score);
+      finished(score, recording);
     }
 
     if (bird_y>Y_MAX)
@@ -207,14 +245,16 @@ void loop()
 
     tube_countdown--;
 
-    //shift all tubes left
+    //is it time to shift the tubes to left?
     if (millis()-tube_time > tube_shift_delay)
     {
       tube_bits_at_bird=0;
 
       tube_time=millis();
+      //traverse all the tubes
       for (int tube_nr=0; tube_nr<TUBES; tube_nr++)
       {
+        //is the tube active? (inactive tubes are outside the left of the screen)
         if (tubes[tube_nr].x>=X_MIN)
         {
           //remove from old location
@@ -232,10 +272,12 @@ void loop()
             //are we on the birdplace?
             if (tubes[tube_nr].x==bird_x)
             {
+              //store it to blend with the bird and do collision detetion later
               tube_bits_at_bird=tube_bits;
             }
             else
             {
+              //draw the tube
               lc.setRow(0, tubes[tube_nr].x, tube_bits);
             }
 
@@ -243,7 +285,7 @@ void loop()
             if (tubes[tube_nr].x==bird_x-1)
             {
               score++; //scored a point! \o/
-              tone(soundPin, 1000+(score*100), 100);
+              sound( 1000+(score*100), 100);
             }
           }
         }
@@ -270,21 +312,23 @@ void loop()
       //collision?
       if ( (tube_bits_at_bird|bird_bits) == tube_bits_at_bird)
       {
+        //blink and make sound
         for (int i=0; i<10; i++)
         {
-          tone(soundPin, 1000, 100);
+          sound( 1000, 100);
           lc.setRow(0, bird_x, bird_bits);
           delay(50);
-          tone(soundPin, 500, 100);
+          sound( 500, 100);
           lc.setRow(0, bird_x, bird_bits|tube_bits_at_bird);
           delay(50);
         }
-        finished(score);
+        finished(score, recording);
       }
     }
 
+
     //record framenumber since last press
-    recording[recording_press_nr]++;
+    recording_press_time++;
 
 
     //wait for next frame
