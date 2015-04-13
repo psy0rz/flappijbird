@@ -41,9 +41,9 @@ static const int X_MAX = 7;
 static const int X_MIN = 0;
 
 //bird and tube settings
-static const int BIRD_JUMP_SPEED = 60; //strongness of the jump. 
+static const int BIRD_JUMP_SPEED = 23; //strongness of the jump. 
 static const int TUBES = 3; //max nr of tubes active at the same time
-static const int BIRD_GRAVITY=-7; 
+static const int BIRD_GRAVITY=-1; 
 
 LedControl lc=LedControl(DATA_PIN, CLK_PIN, CS_PIN, 1);
 
@@ -134,18 +134,18 @@ void loop()
   int tube_min=100; //min and max tube y-offsets for randomizer
   int tube_max=800;
   int tube_gap=300; //gap size
-  int tube_countdown_min=10; //min and max time for tube creation randomizer 
-  int tube_countdown_max=100;
+  int tube_countdown_min=30; //min and max time for tube creation randomizer 
+  int tube_countdown_max=250;
 
   //tube dynamics
-  int tube_shift_delay=10; //frames between each left shift (static for now)
+  int tube_shift_delay=25; //frames between each left shift (static for now)
   tube_status tubes[TUBES];  //the list of tubes (look at tube_status struct for more info)
   int tube_shift_countdown=tube_shift_delay; //count down before next leftshit
   int tube_countdown=10; //cycles before creating next tube
   byte tube_bits_at_bird=0;
 
   unsigned long start_time=millis();
-  int frame_time=25;
+  int frame_time=9;
 
   bool button_state=true;
 
